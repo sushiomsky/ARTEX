@@ -13,9 +13,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
 import { auth } from "@/lib/auth";
+import { t } from "@/lib/translations";
+
+function getLocale(): 'en' | 'es' | 'fr' | 'zh' {
+  if (typeof window !== 'undefined') {
+    const lang = navigator.language.slice(0, 2);
+    if (['en', 'es', 'fr', 'zh'].includes(lang)) return lang as 'en' | 'es' | 'fr' | 'zh';
+  }
+  return 'en';
+}
 
 export default function LoginPage() {
   const router = useRouter();
+  const locale = getLocale();
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -24,7 +34,6 @@ export default function LoginPage() {
   const [termsOpen, setTermsOpen] = useState(false);
   const [readToEnd, setReadToEnd] = useState(false);
   const termsBodyRef = useRef<HTMLDivElement>(null);
-
   // 滚动到条款底部（含无需滚动即可完整展示的情况）方可点击「同意」。
   function handleTermsScroll() {
     const el = termsBodyRef.current;

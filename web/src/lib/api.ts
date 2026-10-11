@@ -128,7 +128,7 @@ export async function http<T>(path: string, init?: RequestInit): Promise<T> {
       document.cookie = "artex_token=; path=/; max-age=0";
       window.location.href = "/login";
     }
-    throw new Error("未授权");
+    throw new Error("Unauthorized");
   }
   if (!r.ok) {
     const fallback = `${init?.method ?? "GET"} ${path}: ${r.status}`;
@@ -165,53 +165,29 @@ export async function http<T>(path: string, init?: RequestInit): Promise<T> {
 // Token is appended as ?token= because SSE can't carry cookies cross-origin.
 // mockReport returns a canned Markdown report for the demo.
 function mockReport(_task?: string): string {
-  return `# ARTEX 渗透测试报告 — Acme Corp
+  return `# ARTEX {{report_title}} — Acme Corp
 
-## 概览
-- 范围：acme.com（含 www / admin / api / shop / vpn 子域）
-- 已确认发现：6 项（高危 3 · 中危 3 · 低危 2）
-- 引擎模式：exploring
+## {{overview}}
+- {{scope}} acme.com ({{subdomains}})
+- {{confirmed_findings}} 6 items (High 3 · Medium 3 · Low 2)
+- {{engine_mode}} exploring
 
-## 关键发现
-1. **[高] 后台默认口令** admin.acme.com admin/admin123 → 可完全接管后台。
-2. **[高] SQL 注入** www.acme.com/search?q= → 可读取 acme_prod 库。
-3. **[高] IDOR** api.acme.com/v1/orders?id= → 可越权读取他人订单（含手机号/地址）。
-4. **[中] 反射型 XSS**、**暴露 .git 源码**、**登录无速率限制**。
+## {{key_findings}}
+1. **[{{high}}] {{admin_default_password}}** admin.acme.com admin/admin123 → {{can_fully_takeover_admin}}
+2. **[{{high}}] {{sql_injection}}** www.acme.com/search?q= → {{can_read_acme_prod_db}}
+3. **[{{high}}] IDOR** api.acme.com/v1/orders?id= → {{can_read_others_orders}} ({{contains_pii}})
+4. **[{{medium}}] {{reflected_xss}}**, **{{exposed_git_repo}}**, **{{login_no_rate_limit}}**
 
-## 建议
-- 后台强制改密 + 启用 MFA、封禁默认口令。
-- search 接口参数化查询、输出编码。
-- API 增加对象级授权校验（IDOR）、更换强 JWT 密钥。
+## {{recommendations}}
+- {{force_admin_password_change}} + enable MFA, block default passwords.
+- parameterize search API params, encode output.
+- add object-level authorization to API (IDOR), rotate strong JWT keys.
 
-> （demo）本报告由 mock 数据生成，仅用于界面演示。`;
-}
-
-export function sseUrl(path: string): string {
-  const base =
-    process.env.NEXT_PUBLIC_SSE_BASE ??
-    (process.env.NODE_ENV !== "production" && typeof window !== "undefined"
-      ? `${window.location.protocol}//${window.location.hostname}:8787`
-      : "");
-  const token = getToken();
-  const sep = path.includes("?") ? "&" : "?";
-  return token ? `${base}${path}${sep}token=${encodeURIComponent(token)}` : `${base}${path}`;
-}
-
-const get = <T>(p: string) => http<T>(p);
-const post = <T>(p: string, body?: unknown) =>
-  http<T>(p, { method: "POST", body: body ? JSON.stringify(body) : undefined });
-const put = <T>(p: string, body?: unknown) =>
-  http<T>(p, { method: "PUT", body: body ? JSON.stringify(body) : undefined });
-const patch = <T>(p: string, body?: unknown) =>
-  http<T>(p, { method: "PATCH", body: body ? JSON.stringify(body) : undefined });
-const del = <T>(p: string, body?: unknown) =>
-  http<T>(p, { method: "DELETE", body: body ? JSON.stringify(body) : undefined });
-
-// Go serializes nil slices as JSON null — coerce to [].
-const arr = <T>(x: T[] | null | undefined): T[] => x ?? [];
+> (demo) This report is generated from mock data for UI demo only.
+`},
 const tq = (task?: string, sep: "?" | "&" = "?") => (task ? `${sep}task=${encodeURIComponent(task)}` : "");
 
-// findingFilterParams 把发现页的筛选条件序列化成 query string。列表 / 分组 /
+// findingFilterParams serialize finding page filter conditions into query string. List / group /
 // 资产树 / 导出共用同一份,新增筛选项只改这里(后端也只解析这一份)。
 function findingFilterParams(q: Omit<FindingQuery, "page" | "pageSize">): URLSearchParams {
   const p = new URLSearchParams();
@@ -233,7 +209,7 @@ function interceptPageQuery(page: number, size: number, filter: InterceptApprova
 }
 
 export const api = {
-  // 后端应用版本号（release 时由 ldflags 注入，默认 "dev"）。
+  // Backend application version (injected by ldflags at release, defaults to "dev")
   health: () => get<{ ok: boolean; service: string; version: string }>("/health"),
 
   // ---- auth ----
@@ -273,7 +249,7 @@ export const api = {
       seed_first_intent: input.seedFirstIntent ?? false,
       plan_heartbeat_seconds: input.planHeartbeatSeconds ?? 0, // 0 = 后端归一到默认 600(10min)
       coverage_enabled: input.coverageEnabled ?? true, // 默认开;false=关闭资产覆盖度功能
-      intercept_rules: input.interceptRules ?? [], // 任务级资产拦截规则
+      intercept_rules: input.interceptRules ?? [], // Task-level asset intercept rules
     }),
   taskCategories: () => get<{ categories: TaskCategory[] }>("/task-categories").then((r) => arr(r.categories)),
   updateTask: (id: string, input: { name?: string; pinned?: boolean }) => patch<Task>(`/tasks/${id}`, input),
@@ -284,7 +260,7 @@ export const api = {
   deleteTaskCategory: (id: number) => del<{ deleted: number }>(`/task-categories/${id}`),
   updateTaskCategory: (taskId: string, categoryId?: number) =>
     patch<Task>(`/tasks/${taskId}/category`, { category_id: categoryId ?? null }),
-  // categoryId 省略/undefined = 移出分类（后端收到 null）
+  // categoryId omitted/undefined = remove from category (backend receives null)
   updateTasksCategory: (taskIds: string[], categoryId?: number) =>
     post<{ items: BatchCategoryItem[]; category: TaskCategory | null }>("/tasks/category/batch", {
       task_ids: taskIds,
@@ -342,7 +318,7 @@ export const api = {
     intentId: string,
     action: "pause" | "resume" | "cancel",
     reason?: string,
-    // cancel 专用:soft(默认,假删除,意图置 deleted + 记删除原因)| hard(真删除,级联移除独占子孙)。
+    // cancel dedicated:soft(default, soft delete, set intent to deleted + record deletion reason)| hard(真删除,级联移除独占子孙)。
     mode?: "soft" | "hard",
   ) =>
     post<{
@@ -358,15 +334,15 @@ export const api = {
       request_id: string;
     }>(`/tasks/${taskId}/intents/${intentId}/messages`, { message, request_id: requestId }),
   taskLLMResolution: (id: string) => get<TaskLLMResolutions>(`/tasks/${id}/llm/resolution`),
-  // 重跑一条没跑成功的意图(blocked/exhausted/stopped)：置回 open，worker 会重新认领、从头再跑。
+  // Re-run a failed intent (blocked/exhausted/stopped): set back to open, worker will re-claim and start from head
   rerunIntent: (taskId: string, intentId: string) =>
     post<{ id: string; reopened: number }>(`/tasks/${taskId}/intents/${intentId}/rerun`),
-  // 批量重跑本任务全部 blocked 意图（一次网络/LLM 断连导致多条 blocked 时一键全部重试）。
+  // Batch re-run all blocked intents (one-click retry for all intents when network/LLM disconnect causes multiple blocked states)
   rerunBlocked: (taskId: string) => post<{ id: string; reopened: number }>(`/tasks/${taskId}/intents/rerun-blocked`),
   setActive: (id: string) => post<{ active: string }>("/active", { id }),
   // ---- stats ----
   stats: (task?: string) => get<Stats>(`/stats${tq(task)}`),
-  // 资产测试覆盖度(粗估，供参考)：范围内资产被 fact 碰过的占比 + 按类型的 总数/已测。
+  // Asset test coverage (rough estimate for reference): proportion of assets within scope that have been fact-checked + by type total/tested
   taskCoverage: (id: string) =>
     get<{
       enabled: boolean; // 资产覆盖度功能是否开启；false 时其余字段为零值
@@ -376,12 +352,12 @@ export const api = {
       pct: number | null;
       by_type: { type: string; total: number; tested: number }[];
     }>(`/tasks/${id}/coverage`),
-  // 资产覆盖图：范围内全部资产 + 连接用的根域名/公司节点，含 tested/in_scope。
+  // Asset coverage graph: all assets within scope + connected root domains/company nodes, includes tested/in_scope
   taskCoverageGraph: (id: string) => get<CoverageGraphData>(`/tasks/${id}/coverage-graph`),
-  // 全局 llm_usage 聚合（仪表盘新版 token 视图）：按 profile 总量 + 按天分桶。
+  // Global llm_usage aggregation (dashboard new version token view): by profile total + by day bucket
   usageStats: (days = 365) => get<UsageStats>(`/tokens/usage?days=${days}`),
-  // ---- 目标管理（总览）----
-  // 本任务全部目标（text/vulnclass/state）。
+  // ---- Goal Management (Overview) ----
+  // All goals of this task (text/vulnclass/state).
   taskGoals: (id: string) =>
     get<{ goals: TaskGoal[] | null }>(`/tasks/${id}/goals`).then((response) => ({ goals: arr(response.goals) })),
   // 人工新增目标：写入图谱并通知 planner、复活任务。
@@ -393,8 +369,8 @@ export const api = {
   // 人工删除目标（硬删除）：通知 planner，删除不复活任务。
   deleteGoal: (id: string, goalId: string) => del<{ ok: boolean }>(`/tasks/${id}/goals/${goalId}`),
 
-  // ---- 操作约束管理（总览）----
-  // 本任务全部操作约束（allow/deny）。
+  // ---- Operation Constraint Management (Overview) ----
+  // All operation constraints of this task (allow/deny).
   taskConstraints: (id: string) =>
     get<{ constraints: TaskConstraint[] | null }>(`/tasks/${id}/constraints`).then((response) => ({
       constraints: arr(response.constraints),
@@ -409,7 +385,7 @@ export const api = {
   deleteConstraint: (id: string, constraintId: string) =>
     del<{ ok: boolean }>(`/tasks/${id}/constraints/${constraintId}`),
 
-  // ---- 任务级资产拦截/允许规则（总览）----
+  // ---- Task-level Asset Intercept/Allow Rules (Overview) ----
   taskInterceptRules: (id: string) =>
     get<{ rules: AssetInterceptRule[] | null }>(`/tasks/${id}/intercept-rules`).then((r) => arr(r.rules)),
   createTaskInterceptRule: (id: string, rule: AssetInterceptRuleInput) =>
@@ -421,14 +397,14 @@ export const api = {
   toggleTaskInterceptRule: (id: string, ruleId: number, enabled: boolean) =>
     post<{ ok: boolean; enabled: boolean }>(`/tasks/${id}/intercept-rules/${ruleId}/toggle`, { enabled }),
 
-  // 本任务测试范围列表（含继承自来源任务的范围）。
+  // List of test scope for this task (includes scope inherited from source tasks).
   taskScope: (id: string) => get<{ scope: TaskScopeRow[] }>(`/tasks/${id}/scope`),
   // 手动新增一条测试范围（kind=company/root_domain/subdomain/ip/cidr）。
   addTaskScope: (id: string, kind: string, value: string, reason?: string) =>
     post<TaskScopeRow>(`/tasks/${id}/scope`, { kind, value, reason }),
   // 删除本任务的一条测试范围。
   deleteTaskScope: (id: string, scopeId: number) => del<{ ok: boolean }>(`/tasks/${id}/scope/${scopeId}`),
-  // 某资产在本任务里关联的意图 / 事实 / 发现（覆盖图节点抽屉用）。
+  // Intent / fact / finding associated with an asset in this task (used for coverage graph drawer).
   taskAssetRefs: (id: string, assetId: number) => get<CoverageAssetRefs>(`/tasks/${id}/asset-refs?asset_id=${assetId}`),
 
   // ---- workspace file manager (workDir) ----
@@ -551,12 +527,12 @@ export const api = {
     p.set("limit", String(q.pageSize));
     return get<FindingGroupsPage>(`/exploration/findings/groups?${p.toString()}`);
   },
-  // findingAssetTree 取「按资产」视图的左侧树:只含有发现的资产及其祖先,
+  // findingAssetTree extract left-side tree for "by asset" view: contains only discovered assets and their ancestors,
   // 节点带子树聚合计数。不分页——树是导航结构,一次取完。
   findingAssetTree: (q: Omit<FindingQuery, "page" | "pageSize">) =>
     get<FindingAssetTree>(`/exploration/findings/asset-tree?${findingFilterParams(q).toString()}`),
   findingStats: () => get<FindingStats>("/exploration/findings/stats"),
-  // exportFindings 触发发现页导出并下载文件。scope=selected 时传 ids(finding_id 列表);
+  // exportFindings trigger finding page export and download file. When scope=selected, pass ids (finding_id list);
   // scope=filtered 时传当前筛选(沿用 FindingQuery 的筛选字段);scope=all 忽略筛选。
   exportFindings: async (opts: {
     format: "md-single" | "md-zip" | "csv" | "json";
@@ -660,7 +636,7 @@ export const api = {
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   },
-  // 漏洞链路:该漏洞节点回溯到任务初始节点的子图(节点 + 关系)。
+  // Vulnerability lineage: lineage subgraph from vulnerability node back to task initial node (nodes + relationships).
   findingLineage: (id: string) => get<{ nodes: TaskNode[]; edges: Edge[] }>(`/exploration/findings/${id}/lineage`),
   setFindingStatus: (id: string, status: FindingStatus) => patch<Finding>(`/exploration/findings/${id}`, { status }),
   setFindingSeverity: (id: string, severity: Severity) => patch<Finding>(`/exploration/findings/${id}`, { severity }),
@@ -698,7 +674,7 @@ export const api = {
       .then(arr)
       .catch(() => [] as ConvTokenSummary[]),
   explorationGraph: (task?: string) => get<{ nodes: TaskNode[]; edges: Edge[] }>(`/exploration/graph${tq(task)}`),
-  // 播报板:服务端按创建顺序分页的探索节点(默认最新在前)。
+  // Broadcast board: paginated exploration nodes on server ordered by creation time (default newest first).
   explorationNodes: (task: string, query: ExplorationNodeQuery = {}) => {
     const q = new URLSearchParams();
     if (task) q.set("task", task);
