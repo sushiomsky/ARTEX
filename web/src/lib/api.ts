@@ -186,6 +186,30 @@ function mockReport(_task?: string): string {
 > (demo) This report is generated from mock data for UI demo only.
 `;
 }
+
+export function sseUrl(path: string): string {
+  const base =
+    process.env.NEXT_PUBLIC_SSE_BASE ??
+    (process.env.NODE_ENV !== "production" && typeof window !== "undefined"
+      ? `${window.location.protocol}//${window.location.hostname}:8787`
+      : "");
+  const token = getToken();
+  const sep = path.includes("?") ? "&" : "?";
+  return token ? `${base}${path}${sep}token=${encodeURIComponent(token)}` : `${base}${path}`;
+}
+
+const get = <T>(p: string) => http<T>(p);
+const post = <T>(p: string, body?: unknown) =>
+  http<T>(p, { method: "POST", body: body ? JSON.stringify(body) : undefined });
+const put = <T>(p: string, body?: unknown) =>
+  http<T>(p, { method: "PUT", body: body ? JSON.stringify(body) : undefined });
+const patch = <T>(p: string, body?: unknown) =>
+  http<T>(p, { method: "PATCH", body: body ? JSON.stringify(body) : undefined });
+const del = <T>(p: string, body?: unknown) =>
+  http<T>(p, { method: "DELETE", body: body ? JSON.stringify(body) : undefined });
+
+// Go serializes nil slices as JSON null — coerce to [].
+const arr = <T>(x: T[] | null | undefined): T[] => x ?? [];
 const tq = (task?: string, sep: "?" | "&" = "?") => (task ? `${sep}task=${encodeURIComponent(task)}` : "");
 
 // findingFilterParams serialize finding page filter conditions into query string. List / group /

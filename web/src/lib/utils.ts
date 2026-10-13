@@ -5,16 +5,15 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-// Assist judging Close intent in drawer/box (Sheet/Dialog) onInteractOutside.
+// Helper for judging Close intent in drawer/box (Sheet/Dialog) onInteractOutside.
 //
 // Background: Radix popups inside a drawer (Select dropdown, DropdownMenu, Popover, etc.) portal to the drawer
-// itself. Clicking overlay/outside with a popup open looks like dismissing it, so this pointerdown hits both Select and Sheet
-// DismissableLayer samewhenhandle;Select firstOffand is  discrete event,React willsync flush,at is 
-// rounds to the Sheet handler, where a popup's data-state flips to closed early — detecting 'now' whether a popup is open
-// daybutnotreliable(measuredverify).
+// itself. Clicking overlay/outside with a popup open also reaches the Sheet's DismissableLayer handler; Select closes
+// first via a discrete event that React flushes synchronously, so by the time the Sheet handler runs, the popup's
+// data-state has already flipped to closed — sampling openness at that point is unreliable (verified by measurement).
 //
-    true, // correctlyapproach:Radix   pointerdown listen in bubblestage;we in  capture stage(earlyatit)first
-// "Whether any dialog is open right now"recorddowncome,onInteractOutside againreadthisrecordvaluecomedecidewhetherAllowOff.
+// Correct approach: listen for pointerdown in the capture stage (before Radix's bubble-stage handlers) and record
+// "whether any dialog is open right now"; onInteractOutside then reads that recorded value to decide whether to allow close.
 function isRadixOverlayOpenNow(): boolean {
   if (typeof document === "undefined") return false;
   return !!document.querySelector(
