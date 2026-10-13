@@ -1,13 +1,14 @@
 import en from './locales/en.json';
 import es from './locales/es.json';
 import fr from './locales/fr.json';
-
-type Locale = 'en' | 'es' | 'fr';
+import zh from './locales/zh.json';
+type Locale = 'en' | 'es' | 'fr' | 'zh';
 
 const translations: Record<Locale, typeof en> = {
   en,
   es,
   fr,
+  zh,
 };
 
 export function t(key: string, locale: Locale = 'en'): string {

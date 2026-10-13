@@ -9,14 +9,14 @@ import { ArrowUpCircleIcon } from "lucide-react";
 import { api } from "@/lib/api";
 
 /**
- * 顶栏的"有新版本"提示：整页加载时查一次，有更新就在版本号旁边亮出来，
- * 点击直达系统配置页的「版本与更新」卡片。
+ * Top-bar "new version available" hint: checks once per full page load; with an update it lights up next to the version number,
+ * clicking jumps to the settings page 'version & updates' card.
  *
- * 后端对 GitHub 的查询结果有 30 分钟缓存，所以这里每次挂载都查一次是安全的
- * ——未认证的 GitHub API 只有 60 次/小时/IP，没有那层缓存的话，多开几个标签页
- * 就会把配额耗光，之后真想更新反而查不动。
+ * The backend caches GitHub results for 30 min, so checking once per mount here is safe 
+ * — unauthenticated GitHub API allows only 60 req/hour/IP; without that cache layer, opening several tabs
+ * would burn the quota, and real updates couldn't be checked after.
  *
- * 查询失败一律静默：顶栏不是报错的地方，用户进设置页点「检查更新」会看到原因。
+ * Query failures stay silent: the top bar isn't an error reporter; users checking updates in settings will see the reason.
  */
 export function UpdateBadge() {
   const [latest, setLatest] = React.useState("");
@@ -26,11 +26,11 @@ export function UpdateBadge() {
     api
       .checkUpdate()
       .then((r) => {
-        // has_update 已经包含了"版本号可比较"的判断，开发构建不会亮这个提示。
+        // has_update already implies "versions comparable"; dev builds never light this hint.
         if (alive && r.has_update && r.latest) setLatest(r.latest.replace(/^v(?=\d)/, ""));
       })
       .catch(() => {
-        // 静默：没网 / GitHub 限流都不该在顶栏弹错误。
+        // Silent: no network / GitHub rate limits never pop errors in the top bar.
       });
     return () => {
       alive = false;

@@ -1,14 +1,14 @@
 package notify
 
-// Snapshot 是 notification_events.snapshot 这一 JSONB 列的契约。写方是 db 层的
-// 漏洞落库事务，读方是 server 层的投递引擎与过滤匹配。定义放在本包是因为它是
-// 「通知领域」的载荷：db 只负责序列化，不理解字段含义。
+// Snapshot is a contract for the notification_events.snapshot JSONB column. The writing side is the db layer
+// For vulnerability logging transactions, the reader is the delivery engine and filter matching of the server layer. The definition is placed in this package because it is
+// "Notification field" payload: db is only responsible for serialization and does not understand the meaning of the fields.
 //
-// 为什么冗余存漏洞字段而不在渲染时回查：漏洞事后会被改名、改级别、改状态，
-// 而推送内容应当反映**事发当时**的结论——回查会得到「事后被改成 low」的
-// 危险误导。另外 fan-out 与渲染因此不必 JOIN findings/tasks/assets 三张表。
+// Why the vulnerability field is stored redundantly and not checked back during rendering: the vulnerability will be renamed, leveled, and status changed afterwards.
+// The push content should reflect the conclusion of the event at the time of the incident - a review will result in "it was changed to low afterwards"
+// Dangerously misleading. In addition, fan-out and rendering therefore do not need to JOIN the three tables of findings/tasks/assets.
 type Snapshot struct {
-	// 事件类型：finding_created / finding_status_changed
+	// Event type: finding_created / finding_status_changed
 	Kind      string  `json:"kind"`
 	FindingID int64   `json:"finding_id"`
 	TaskID    int64   `json:"task_id"`
@@ -17,33 +17,33 @@ type Snapshot struct {
 	Severity  string  `json:"severity"`
 	Summary   string  `json:"summary"`
 	AssetIDs  []int64 `json:"asset_ids"`
-	// 仅 kind=finding_status_changed 时非空。
+	// Only non-null when kind=finding_status_changed.
 	FromStatus string `json:"from_status,omitempty"`
 	ToStatus   string `json:"to_status,omitempty"`
 }
 
-// Item 是一条待推送的漏洞，供渠道渲染。
+// Item is a vulnerability to be pushed for the channel to render.
 type Item struct {
 	FindingID int64
 	Name      string
 	VulnClass string
 	Severity  string
 	Summary   string
-	// Assets 是解析后的资产展示名（如域名/IP）。由 server 层填充——
-	// 本包不碰数据库，拿不到名字。
+	// Assets is the resolved asset display name (such as domain name/IP). Filled by the server layer——
+	// This package does not touch the database and cannot get the name.
 	Assets []string
-	// DetailURL 是漏洞详情回链；为空表示未配 public_base_url，渲染时省略。
+	// DetailURL is the link back to the vulnerability details; if it is empty, it means that public_base_url is not configured and is omitted when rendering.
 	DetailURL string
-	// 状态变更事件专用；两项均非空时渲染成「待处理 → 已修复」。
+	// Special for state change events; when both items are non-null, it is rendered as "Pending → Fixed".
 	FromStatus string
 	ToStatus   string
 }
 
-// IsStatusChange 报告该条目是否为状态变更事件。
+// IsStatusChange reports whether the entry is a status change event.
 func (i Item) IsStatusChange() bool { return i.FromStatus != "" || i.ToStatus != "" }
 
-// Title 返回条目的展示标题：优先人工命名的 name，回退漏洞类型 vulnclass，
-// 两者都空时用一个占位符——绝不输出空标题。
+// Title returns the display title of the entry: giving priority to manually named name, fallback vulnerability type vulnclass,
+// Use a placeholder when both are empty - an empty title is never output.
 func (i Item) Title() string {
 	if i.Name != "" {
 		return i.Name
@@ -51,19 +51,19 @@ func (i Item) Title() string {
 	if i.VulnClass != "" {
 		return i.VulnClass
 	}
-	return "(未命名漏洞)"
+	return "(Unnamed vulnerability)"
 }
 
-// Message 是一次渠道发送的完整内容。
+// Message is the complete content sent by a channel.
 type Message struct {
-	// 单条推送时长度为 1；汇总推送（digest）时为一整批。
-	// 空切片是非法的，调用方须保证至少一条。
+	// The length of a single push is 1; the length of a digest push is a whole batch.
+	// Empty slices are illegal, and the caller must ensure at least one.
 	Items []Item
-	// Batch=true 时按汇总消息渲染（换标题、带上时间窗与条数）。
+	// When Batch=true, the message is rendered according to the summary (change the title, add the time window and number of messages).
 	Batch bool
-	// WindowMinutes 是汇总周期（分钟），仅 Batch=true 时用于文案「近 N 分钟」。
-	// 刻意由配置显式传入而不是渲染时算 time.Since：渲染保持确定性，才好测。
+	// WindowMinutes is the summary period (minutes), which is only used for copywriting "near N minutes" when Batch=true.
+	// Deliberately pass in the configuration explicitly instead of calculating time.Since when rendering: rendering remains deterministic and easy to test.
 	WindowMinutes int
-	// HomeURL 是平台面板地址（全局 public_base_url）；空则不带面板入口。
+	// HomeURL is the platform panel address (global public_base_url); if empty, there will be no panel entry.
 	HomeURL string
 }
